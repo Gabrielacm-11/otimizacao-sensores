@@ -8,7 +8,7 @@ using InteractiveUtils
 begin
 	using HiGHS
 	using JuMP
-	using PlotlyJS, LinearAlgebra
+	using PlotlyJS, LinearAlgebra, Distributions,Random
 end
 
 # ╔═╡ 16ea007e-fbeb-4efb-bb71-3410714fcbc5
@@ -224,37 +224,6 @@ md"""
 $$A_{i}x+C_{i}-S_{i}\leq 0$$
 """
 
-# ╔═╡ 8aa521df-e194-4383-a242-24b7d4226575
-function dᵢ(n,xₖ,x)
-	for i = 1:n
-		aux = sqrt.((x[i][1].-xₖ[1])^2+(x[i][2].-xₖ[2])^2)
-		dᵢ[i,1]=aux[1]
-		dᵢ[i,2]=aux[2]
-	end
-	return dᵢ
-end
-
-# ╔═╡ 14454034-8ec3-43e5-bdd7-ae825b026653
-function D(n,xₖ,x)
-	dᵢ(n,xₖ,x)
-	for i = 1:n-1
-		aux = dᵢ[i].-dᵢ[n]
-		Dᵢ[i,1]=aux[1]
-		Dᵢ[i,2]=aux[2]
-	end
-	return Dᵢ
-end
-
-# ╔═╡ 9b3b64b5-4f9a-4286-83d7-10a148a7e9bf
-function rᵢ(n,xₖ,x)
-	for i = 1:n-1
-		aux = Dᵢ(n,xₖ,x)+x[i]
-		rᵢ[i,1]=aux[1]
-		rᵢ[i,2]=aux[2]
-	end
-	return rᵢ
-end
-
 # ╔═╡ 97aa1405-83a0-43db-9750-b5bdb6104d87
 function sᵢ(n,xₖ,x)
 	sᵢ = x
@@ -266,46 +235,113 @@ function sᵢ(n,xₖ,x)
 	return sᵢ
 end
 
-# ╔═╡ 7afdd28e-80fc-4321-ac3f-b126cea1b160
-function Aᵢ(n,xₖ,x)
-	Aᵢ = x
+# ╔═╡ b3415a6f-3ef2-44c4-88e0-aacb329c6cce
+function calcula_dᵢ(n,xₖ,x)
+	auxx = Vector{Float64}(undef, n)
 	for i = 1:n
-		aux = ((xₖ.-x[n])./norm.(xₖ.-x[n])).-((xₖ.-x[i])./norm.(xₖ.-x[i]))
-		Aᵢ[i,1]=aux[1]
-		Aᵢ[i,2]=aux[2]
+		aux= sqrt((x[i][1].-xₖ[1]).^2+(x[i][2].-xₖ[2]).^2)
+		auxx[i]=aux
 	end
-	return Aᵢ
+	return auxx
 end
 
-# ╔═╡ b0498f30-3213-485c-97c5-6cc94c99bb4a
-function Cᵢ(n,xₖ,x)
-	Cᵢ = x
-	for i = 1:n	
-		aux = rᵢ(n,xₖ,x)+norm(xₖ.-x[n])-((xₖ.-x[n])./norm(xₖ.-x[n])*xₖ)-(xₖ.-x[i])+((xₖ.-x[i])./norm(xₖ.-x[i])*xₖ)
-		Cᵢ[i,1]=aux[1]
-		Cᵢ[i,2]=aux[2]
+# ╔═╡ e512bfd2-dc41-4f94-8ff2-89d2d22444e5
+function calcula_dᵢdₙ(n,xₖ,x)
+	dᵢ = calcula_dᵢ(n,xₖ,x)
+	dᵢdₙ = Vector{Float64}(undef, n-1)
+	for i = 1:n-1
+		dᵢdₙ[i] = dᵢ[i] .- dᵢ[n]
+	end	
+	return dᵢdₙ
+end
+
+# ╔═╡ 60588c84-3079-4367-a305-18cef2c66e21
+function calcula_ω(σ,v)
+	ω = similar(σ)
+	for (index,σi) in enumerate(σ)
+		ω[index] = rand(Normal(0,σi/v))
 	end
-	return Cᵢ
+	return ω
+end
+
+# ╔═╡ 42d6202d-bb1b-4b28-a3aa-3faca6209956
+function calcula_Xi(σ,v)
+	ωᵢ = calcula_ω(σ,v)
+	ωₙ = pop!(ωᵢ)
+	ωᵢ .-= ωₙ
+	ωᵢ *= v
+	return ωᵢ
+end
+
+# ╔═╡ 6aa9a5a3-a411-403d-84f1-1535e251c45e
+begin
+	Random.seed!(3)
+	v = 2
+	σ = [1,2,3]
+	ω = Float64[]
+	for σi in σ
+		push!(ω,rand(Normal(0,σi/v)))
+	end
+	ω
+end
+
+# ╔═╡ 5357d93c-7e33-4b51-a258-2c02d7ecfa55
+function calcula_rᵢ(n,σ,xₖ,X)
+	D = calcula_dᵢdₙ(n,xₖ,X)
+	X = calcula_Xi(σ,v)
+	R = D + X
+	return R
+end
+
+# ╔═╡ c4595db0-c41d-4671-aee3-8f7f95b10aae
+let
+	Random.seed!(13)
+	X = [[0.,0],[0,50],[0,100],[50,100],[100,100],[100,0],[100,50],[50,50],[50,0]]
+	n = length(X)
+	xₖ = [90,90]
+	v = 2
+	σ = Float64[1,2,3,4,5,6,7,8,9]
+	R = calcula_rᵢ(n,σ,xₖ,X)
+	Aᵢ(xᵢ) = ((xₖ - X[end])/norm(xₖ - X[end]))  - ((xₖ - xᵢ)/norm(xₖ - xᵢ))
+	Cᵢ(xᵢ) = norm(xₖ - X[end]) -  norm(xₖ - xᵢ) + dot(Aᵢ(xᵢ),-xₖ)
+	C = R +  Cᵢ.(X[1:end-1])
+	A = Aᵢ.(X[1:end-1])
+	A = permutedims(hcat(A...))
 end
 
 # ╔═╡ c495e742-528f-4d9b-887a-53c487bf3734
-begin
+let
 
 	#######MAIN###########
-	xₖ = (30,50)
-	x = [[0,0],[0,50],[0,100],[50,100],[100,100],[100,0],[100,50],[50,50],[50,0]]
-	n = size(x,1)
-	IC = Model(HiGHS.Optimizer)
+	#xₖ = (30,50)
+	#x = [[0,0],[0,50],[0,100],[50,100],[100,100],[100,0],[100,50],[50,50],[50,0]]
+	#n = size(x,1)
 	
-	Aᵢ(n,xₖ,x)
-	Cᵢ(n,xₖ,x)
-	sᵢ(n,xₖ,x)
- 	@variable(IC,x[1:2]>=0)
- 	@objective(IC, Min, Aᵢ.*x.+Cᵢ.-sᵢ)
- 	@constraint(IC, Aᵢ.*x.+Cᵢ.-sᵢ<= 0)
- 	print(IC)
- 	optimize!(IC)
- 	println("Termination status: $(termination_status(IC))")
+	Random.seed!(13)
+	X = [[0.,0],[0,50],[0,100],[50,100],[100,100],[100,0],[100,50],[50,50],[50,0]]
+	n = length(X)
+	xₖ = [90,90]
+	v = 2
+	σ = Float64[1,2,3,4,5,6,7,8,9]
+	R = calcula_rᵢ(n,σ,xₖ,X)
+	Aᵢ(xᵢ) = ((xₖ - X[end])/norm(xₖ - X[end]))  - ((xₖ - xᵢ)/norm(xₖ - xᵢ))
+	Cᵢ(xᵢ) = norm(xₖ - X[end]) -  norm(xₖ - xᵢ) + dot(Aᵢ(xᵢ),-xₖ)
+	C = R +  Cᵢ.(X[1:end-1])
+	A = Aᵢ.(X[1:end-1])
+	A = permutedims(hcat(A...))
+	
+	IC = Model(HiGHS.Optimizer)
+	print(A)
+	print(C)
+	print()
+	
+ 	#@variable(IC,x[1:2]>=0)
+ 	#@variable(IC,s[1:n-1]>=0)
+	#@objective(IC, Min,sum(s))
+	#@constraint(IC, A⋅x +C -x.-sᵢ<= 0)
+	#print(IC)
+ 	#optimize!(IC)
+ 	#println("Termination status: $(termination_status(IC))")
  	if termination_status(IC) == MOI.OPTIMAL
 		println("Optimal objective value: $(objective_value(IC))")
  		println("x: ",value(x))
@@ -314,63 +350,22 @@ begin
  	end
 end
 
-# ╔═╡ ec741829-2415-48c6-98c4-0b5bf4a6bfbd
-##Chair Transport
+# ╔═╡ b2c24acc-669f-48aa-92c7-0384229dc3b3
 
-# ╔═╡ c9c7bb58-d9a7-4cc9-a7f1-d4bbd22e82c7
-begin
-	# PARAMETERS
-	Chairs = ["P1", "P2"]
-	C=length(Chairs)
-	ProductionLines = ["D1","D2","D3","D4"]
-	P=length(ProductionLines)
-	Profit = [7500, 8500]
-	Capacity = [3250, 3500, 3500, 3000]
-	RecourseUsage =
-	[
-	137  92  48 173;
-	 54 109 111  85;
-	]
-	#************************************************************************
-	#************************************************************************
-	# Model
-	ic = Model(HiGHS.Optimizer)
-	@variable(ic,z[1:C, 1:P]>=0)
-	@objective(ic, Min, sum( RecourseUsage[c,p]*z[c,p] for c=1:C, p=1:P))
-	#restrições
-	@constraint(ic, [c=1:C], sum( z[c,p]*z[c,p] for c=1:C) <= Profit[c]) 
-	@constraint(ic, [p=1:P], sum( z[c,p]*z[c,p] for p=1:P) <= Capacity[p]) 
-	#************************************************************************
-	#************************************************************************
-	# Solve
-	solution = optimize!(ic)
-	println("Termination status: $(termination_status(ic))")
-	#************************************************************************
-	#************************************************************************
-	# Solution
-	if termination_status(ic) == MOI.OPTIMAL
-		println("Optimal objective value: $(objective_value(ic))")
-		for c = 1:C
-			for p = 1:P
-				println(value(z[c,p]*0.0375))
-			end
-		end
-	else
-		println("No optimal solution available")
-	end
-end
-#************************************************************************
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
+Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
 HiGHS = "87dc4568-4c63-4d18-b0c0-bb2238e4078b"
 JuMP = "4076af6c-e467-56ae-b986-b466b2749572"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 PlotlyJS = "f0f68f2c-4968-5e81-91da-67840de0976a"
+Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 
 [compat]
-HiGHS = "~1.1.4"
+Distributions = "~0.25.76"
+HiGHS = "~1.2.0"
 JuMP = "~1.3.1"
 PlotlyJS = "~0.18.10"
 """
@@ -381,7 +376,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.8.1"
 manifest_format = "2.0"
-project_hash = "e946c6c47a6c983d5dc8fbc04692139efa9175c3"
+project_hash = "2ed6f6a07a14589ef009a9afd48b1961e73514ce"
 
 [[deps.ArgTools]]
 uuid = "0dad84c5-d112-42e6-8d28-ef12dabb789f"
@@ -422,6 +417,12 @@ deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
 git-tree-sha1 = "19a35467a82e236ff51bc17a3a44b69ef35185a2"
 uuid = "6e34b625-4abd-537c-b88f-471c36dfa7a0"
 version = "1.0.8+0"
+
+[[deps.Calculus]]
+deps = ["LinearAlgebra"]
+git-tree-sha1 = "f641eb0a4f00c343bbc32346e1217b86f3ce9dad"
+uuid = "49dc2e85-a5d0-5ad3-a950-438e2897f1b9"
+version = "0.5.1"
 
 [[deps.ChainRulesCore]]
 deps = ["Compat", "LinearAlgebra", "SparseArrays"]
@@ -512,6 +513,12 @@ uuid = "ade2ca70-3891-5945-98fb-dc099432e06a"
 deps = ["Mmap"]
 uuid = "8bb1440f-4735-579b-a4ab-409b98df4dab"
 
+[[deps.DensityInterface]]
+deps = ["InverseFunctions", "Test"]
+git-tree-sha1 = "80c3e8639e3353e5d2912fb3a1916b8455e2494b"
+uuid = "b429d917-457f-4dbc-8f4c-0cc954292b1d"
+version = "0.4.0"
+
 [[deps.DiffResults]]
 deps = ["StaticArraysCore"]
 git-tree-sha1 = "782dd5f4561f5d267313f23853baaaa4c52ea621"
@@ -528,6 +535,12 @@ version = "1.12.0"
 deps = ["Random", "Serialization", "Sockets"]
 uuid = "8ba89e20-285c-5b6f-9357-94700520ee1b"
 
+[[deps.Distributions]]
+deps = ["ChainRulesCore", "DensityInterface", "FillArrays", "LinearAlgebra", "PDMats", "Printf", "QuadGK", "Random", "SparseArrays", "SpecialFunctions", "Statistics", "StatsBase", "StatsFuns", "Test"]
+git-tree-sha1 = "04db820ebcfc1e053bd8cbb8d8bccf0ff3ead3f7"
+uuid = "31c24e10-a181-5473-b8eb-7969acd0382f"
+version = "0.25.76"
+
 [[deps.DocStringExtensions]]
 deps = ["LibGit2"]
 git-tree-sha1 = "c36550cb29cbe373e95b3f40486b9a4148f89ffd"
@@ -539,8 +552,20 @@ deps = ["ArgTools", "FileWatching", "LibCURL", "NetworkOptions"]
 uuid = "f43a241f-c20a-4ad4-852c-f6b1247861c6"
 version = "1.6.0"
 
+[[deps.DualNumbers]]
+deps = ["Calculus", "NaNMath", "SpecialFunctions"]
+git-tree-sha1 = "5837a837389fccf076445fce071c8ddaea35a566"
+uuid = "fa6b7ba4-c1ee-5f82-b5fc-ecf0adba8f74"
+version = "0.6.8"
+
 [[deps.FileWatching]]
 uuid = "7b1f6079-737a-58dc-b8bc-7a2ca5c1b5ee"
+
+[[deps.FillArrays]]
+deps = ["LinearAlgebra", "Random", "SparseArrays", "Statistics"]
+git-tree-sha1 = "802bfc139833d2ba893dd9e62ba1767c88d708ae"
+uuid = "1a297f60-69ca-5386-bcde-b61e274b549b"
+version = "0.13.5"
 
 [[deps.FixedPointNumbers]]
 deps = ["Statistics"]
@@ -568,21 +593,27 @@ version = "0.9.17"
 
 [[deps.HiGHS]]
 deps = ["HiGHS_jll", "MathOptInterface", "SparseArrays"]
-git-tree-sha1 = "dc1802d0710a6e685d4279d0d3e6ae5fe35203fe"
+git-tree-sha1 = "d40a9e8db6438481915261a378fc2c8ca70bb63a"
 uuid = "87dc4568-4c63-4d18-b0c0-bb2238e4078b"
-version = "1.1.4"
+version = "1.2.0"
 
 [[deps.HiGHS_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "JLLWrappers", "Libdl", "Pkg"]
-git-tree-sha1 = "b0bf110765a077880aab84876f9f0b8de0407561"
+git-tree-sha1 = "b3e24275666fcc2e24d1a58a9f02acd9d2e23d3a"
 uuid = "8fd58aa0-07eb-5a78-9b36-339c94fd15ea"
-version = "1.2.2+0"
+version = "1.3.0+0"
 
 [[deps.Hiccup]]
 deps = ["MacroTools", "Test"]
 git-tree-sha1 = "6187bb2d5fcbb2007c39e7ac53308b0d371124bd"
 uuid = "9fb69e20-1954-56bb-a84f-559cc56a8ff7"
 version = "0.2.2"
+
+[[deps.HypergeometricFunctions]]
+deps = ["DualNumbers", "LinearAlgebra", "OpenLibm_jll", "SpecialFunctions", "Test"]
+git-tree-sha1 = "709d864e3ed6e3545230601f94e11ebc65994641"
+uuid = "34004b35-14d8-5ef3-9330-4cdb6864b03a"
+version = "0.3.11"
 
 [[deps.IniFile]]
 git-tree-sha1 = "f550e6e32074c939295eb5ea6de31849ac2c9625"
@@ -712,6 +743,12 @@ deps = ["Artifacts", "Libdl"]
 uuid = "c8ffd9c3-330d-5841-b78e-0817d7145fa1"
 version = "2.28.0+0"
 
+[[deps.Missings]]
+deps = ["DataAPI"]
+git-tree-sha1 = "bf210ce90b6c9eed32d25dbcae1ebc565df2687f"
+uuid = "e1d29d7a-bbdc-5cf2-9ac0-f12de2c33e28"
+version = "1.0.2"
+
 [[deps.Mmap]]
 uuid = "a63ad114-7e13-5084-954f-fe012c677804"
 
@@ -773,6 +810,12 @@ git-tree-sha1 = "85f8e6578bf1f9ee0d11e7bb1b1456435479d47c"
 uuid = "bac558e1-5e72-5ebc-8fee-abe8a469f55d"
 version = "1.4.1"
 
+[[deps.PDMats]]
+deps = ["LinearAlgebra", "SparseArrays", "SuiteSparse"]
+git-tree-sha1 = "cf494dca75a69712a72b80bc48f59dcf3dea63ec"
+uuid = "90014a1f-27ba-587c-ab20-58faa44d9150"
+version = "0.11.16"
+
 [[deps.Parameters]]
 deps = ["OrderedCollections", "UnPack"]
 git-tree-sha1 = "34c0e9ad262e5f7fc75b10a9952ca7692cfc5fbe"
@@ -822,6 +865,12 @@ uuid = "de0858da-6303-5e67-8744-51eddeeeb8d7"
 deps = ["Printf"]
 uuid = "9abbd945-dff8-562f-b5e8-e1ebf5ef1b79"
 
+[[deps.QuadGK]]
+deps = ["DataStructures", "LinearAlgebra"]
+git-tree-sha1 = "97aa253e65b784fd13e83774cadc95b38011d734"
+uuid = "1fd47b50-473d-5c70-9696-f719f8f3bcdc"
+version = "2.6.0"
+
 [[deps.REPL]]
 deps = ["InteractiveUtils", "Markdown", "Sockets", "Unicode"]
 uuid = "3fa0cd96-eef1-5676-8a61-b3b8758bbffb"
@@ -841,6 +890,18 @@ git-tree-sha1 = "838a3a4188e2ded87a4f9f184b4b0d78a1e91cb7"
 uuid = "ae029012-a4dd-5104-9daa-d747884805df"
 version = "1.3.0"
 
+[[deps.Rmath]]
+deps = ["Random", "Rmath_jll"]
+git-tree-sha1 = "bf3188feca147ce108c76ad82c2792c57abe7b1f"
+uuid = "79098fc4-a85e-5d69-aa6a-4863f24498fa"
+version = "0.7.0"
+
+[[deps.Rmath_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
+git-tree-sha1 = "68db32dff12bb6127bac73c209881191bf0efbb7"
+uuid = "f50d1b31-88e8-58de-be2c-1cc44531875f"
+version = "0.3.0+0"
+
 [[deps.SHA]]
 uuid = "ea8e919c-243c-51af-8825-aaa63cd721ce"
 version = "0.7.0"
@@ -850,6 +911,12 @@ uuid = "9e88b42a-f829-5b0c-bbe9-9e923198166b"
 
 [[deps.Sockets]]
 uuid = "6462fe0b-24de-5631-8697-dd941f90decc"
+
+[[deps.SortingAlgorithms]]
+deps = ["DataStructures"]
+git-tree-sha1 = "b3363d7460f7d098ca0912c69b082f75625d7508"
+uuid = "a2af1166-a08f-5f64-846c-94a0d3cef48c"
+version = "1.0.1"
 
 [[deps.SparseArrays]]
 deps = ["LinearAlgebra", "Random"]
@@ -875,6 +942,28 @@ version = "1.4.0"
 [[deps.Statistics]]
 deps = ["LinearAlgebra", "SparseArrays"]
 uuid = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
+
+[[deps.StatsAPI]]
+deps = ["LinearAlgebra"]
+git-tree-sha1 = "f9af7f195fb13589dd2e2d57fdb401717d2eb1f6"
+uuid = "82ae8749-77ed-4fe6-ae5f-f523153014b0"
+version = "1.5.0"
+
+[[deps.StatsBase]]
+deps = ["DataAPI", "DataStructures", "LinearAlgebra", "LogExpFunctions", "Missings", "Printf", "Random", "SortingAlgorithms", "SparseArrays", "Statistics", "StatsAPI"]
+git-tree-sha1 = "d1bf48bfcc554a3761a133fe3a9bb01488e06916"
+uuid = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
+version = "0.33.21"
+
+[[deps.StatsFuns]]
+deps = ["ChainRulesCore", "HypergeometricFunctions", "InverseFunctions", "IrrationalConstants", "LogExpFunctions", "Reexport", "Rmath", "SpecialFunctions"]
+git-tree-sha1 = "5783b877201a82fc0014cbf381e7e6eb130473a4"
+uuid = "4c63d2b9-4356-54db-8cca-17b64c39e42c"
+version = "1.0.1"
+
+[[deps.SuiteSparse]]
+deps = ["Libdl", "LinearAlgebra", "Serialization", "SparseArrays"]
+uuid = "4607b0f0-06f3-5cda-b6b1-a6196a1729e9"
 
 [[deps.TOML]]
 deps = ["Dates"]
@@ -1020,14 +1109,15 @@ version = "17.4.0+0"
 # ╟─436080f8-a04a-4099-a84a-9e62db7a7682
 # ╟─cc2b83e1-f73f-4b12-9838-1f0814608ae8
 # ╟─cd85ee94-b233-42ce-b95d-87fa83c4cc18
-# ╠═8aa521df-e194-4383-a242-24b7d4226575
-# ╠═14454034-8ec3-43e5-bdd7-ae825b026653
-# ╠═9b3b64b5-4f9a-4286-83d7-10a148a7e9bf
 # ╠═97aa1405-83a0-43db-9750-b5bdb6104d87
-# ╠═7afdd28e-80fc-4321-ac3f-b126cea1b160
-# ╠═b0498f30-3213-485c-97c5-6cc94c99bb4a
+# ╠═b3415a6f-3ef2-44c4-88e0-aacb329c6cce
+# ╠═5357d93c-7e33-4b51-a258-2c02d7ecfa55
+# ╠═e512bfd2-dc41-4f94-8ff2-89d2d22444e5
+# ╠═42d6202d-bb1b-4b28-a3aa-3faca6209956
+# ╠═60588c84-3079-4367-a305-18cef2c66e21
+# ╠═c4595db0-c41d-4671-aee3-8f7f95b10aae
+# ╠═6aa9a5a3-a411-403d-84f1-1535e251c45e
 # ╠═c495e742-528f-4d9b-887a-53c487bf3734
-# ╠═ec741829-2415-48c6-98c4-0b5bf4a6bfbd
-# ╠═c9c7bb58-d9a7-4cc9-a7f1-d4bbd22e82c7
+# ╠═b2c24acc-669f-48aa-92c7-0384229dc3b3
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
