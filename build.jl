@@ -150,12 +150,11 @@ O problema em questão é não convexo e não linear. No caso de relações sina
 
 # ╔═╡ 3dd2f886-cadc-4977-9fb7-6775a91f4482
 md"
-$\underset{}{\text{minimize}} \sum_{i=1}^{n-1} s_i$
-"
-
-# ╔═╡ 7326928d-6b48-4554-8731-e226acbd091c
-md"
-sujeito a $A_ix + C_i -s_i = 0$
+```math
+\begin{matrix} \min & \displaystyle \sum_{i=1}^{n-1} s_i\\
+	            \text{s. a.}     & A_ix + C_i -s_i = 0
+\end{matrix}
+```
 "
 
 # ╔═╡ bd88545f-9cc6-46bc-b81e-eaf394e3246b
@@ -224,30 +223,19 @@ md"""
 $$A_{i}x+C_{i}-S_{i}\leq 0$$
 """
 
-# ╔═╡ 97aa1405-83a0-43db-9750-b5bdb6104d87
-function sᵢ(n,xₖ,x)
-	sᵢ = x
-	for i = 1:n
-		aux = rᵢ(n,xₖ,x).+norm(xₖ[1].-x[n])-norm(xₖ[1]-x[i])
-		sᵢ[i,1]=aux[1]
-		sᵢ[i,2]=aux[2]
-	end
-	return sᵢ
-end
-
 # ╔═╡ b3415a6f-3ef2-44c4-88e0-aacb329c6cce
-function calcula_dᵢ(n,xₖ,x)
+function calcula_dᵢ(n,xₖ,X)
 	auxx = Vector{Float64}(undef, n)
 	for i = 1:n
-		aux= sqrt((x[i][1].-xₖ[1]).^2+(x[i][2].-xₖ[2]).^2)
+		aux= sqrt((X[i][1].-xₖ[1]).^2+(X[i][2].-xₖ[2]).^2)
 		auxx[i]=aux
 	end
 	return auxx
 end
 
 # ╔═╡ e512bfd2-dc41-4f94-8ff2-89d2d22444e5
-function calcula_dᵢdₙ(n,xₖ,x)
-	dᵢ = calcula_dᵢ(n,xₖ,x)
+function calcula_dᵢdₙ(n,xₖ,X)
+	dᵢ = calcula_dᵢ(n,xₖ,X)
 	dᵢdₙ = Vector{Float64}(undef, n-1)
 	for i = 1:n-1
 		dᵢdₙ[i] = dᵢ[i] .- dᵢ[n]
@@ -273,6 +261,14 @@ function calcula_Xi(σ,v)
 	return ωᵢ
 end
 
+# ╔═╡ 5357d93c-7e33-4b51-a258-2c02d7ecfa55
+function calcula_rᵢ(n,σ,xₖ,X,v)
+	D = calcula_dᵢdₙ(n,xₖ,X)
+	X = calcula_Xi(σ,v)
+	R = D + X
+	return R
+end
+
 # ╔═╡ 6aa9a5a3-a411-403d-84f1-1535e251c45e
 begin
 	Random.seed!(3)
@@ -285,12 +281,24 @@ begin
 	ω
 end
 
-# ╔═╡ 5357d93c-7e33-4b51-a258-2c02d7ecfa55
-function calcula_rᵢ(n,σ,xₖ,X)
-	D = calcula_dᵢdₙ(n,xₖ,X)
-	X = calcula_Xi(σ,v)
-	R = D + X
-	return R
+# ╔═╡ 98edb114-343b-4d36-95aa-a19946a43fd4
+function solucao_LP(A, C, n)
+	IC = Model(HiGHS.Optimizer)
+ 	@variable(IC,x[1:2]>=0)
+ 	@variable(IC,sᵢ[1:n-1]>=0)
+	@objective(IC, Min,sum(sᵢ))
+	@constraint(IC,(A*x)+C-sᵢ .== 0)
+	print(IC)
+ 	optimize!(IC)
+ 	println("Termination status: $(termination_status(IC))")
+ 	if termination_status(IC) == MOI.OPTIMAL
+		println("Optimal objective value: $(objective_value(IC))")
+ 		println("x: ",value.(x))
+	    println("s: ",value.(sᵢ))
+
+	else
+ 		println("No optimal solution available")
+ 	end
 end
 
 # ╔═╡ c4595db0-c41d-4671-aee3-8f7f95b10aae
@@ -298,60 +306,47 @@ let
 	Random.seed!(13)
 	X = [[0.,0],[0,50],[0,100],[50,100],[100,100],[100,0],[100,50],[50,50],[50,0]]
 	n = length(X)
-	xₖ = [90,90]
-	v = 2
-	σ = Float64[1,2,3,4,5,6,7,8,9]
-	R = calcula_rᵢ(n,σ,xₖ,X)
+	xₖ = [15,50]
+	@assert xₖ ∉ X "xₖ belongs to X"
+	v = 0.001
+	σ = fill(4.,n)
+	R = calcula_rᵢ(n,σ,xₖ,X,v)
 	Aᵢ(xᵢ) = ((xₖ - X[end])/norm(xₖ - X[end]))  - ((xₖ - xᵢ)/norm(xₖ - xᵢ))
 	Cᵢ(xᵢ) = norm(xₖ - X[end]) -  norm(xₖ - xᵢ) + dot(Aᵢ(xᵢ),-xₖ)
 	C = R +  Cᵢ.(X[1:end-1])
 	A = Aᵢ.(X[1:end-1])
 	A = permutedims(hcat(A...))
+	solucao_LP(A,C,n)
 end
 
 # ╔═╡ c495e742-528f-4d9b-887a-53c487bf3734
 let
 
 	#######MAIN###########
-	#xₖ = (30,50)
-	#x = [[0,0],[0,50],[0,100],[50,100],[100,100],[100,0],[100,50],[50,50],[50,0]]
-	#n = size(x,1)
-	
-	Random.seed!(13)
-	X = [[0.,0],[0,50],[0,100],[50,100],[100,100],[100,0],[100,50],[50,50],[50,0]]
+	Random.seed!(10)
+	X = [[0.,0],[100,100.],[0,100.],[100,0.]]
 	n = length(X)
-	xₖ = [90,90]
-	v = 2
-	σ = Float64[1,2,3,4,5,6,7,8,9]
-	R = calcula_rᵢ(n,σ,xₖ,X)
+	xₖ = [20,20]
+	v = 20
+	σ = Float64[.5,2,2.0,1]
+	R = calcula_rᵢ(n,σ,xₖ,X,v)
 	Aᵢ(xᵢ) = ((xₖ - X[end])/norm(xₖ - X[end]))  - ((xₖ - xᵢ)/norm(xₖ - xᵢ))
 	Cᵢ(xᵢ) = norm(xₖ - X[end]) -  norm(xₖ - xᵢ) + dot(Aᵢ(xᵢ),-xₖ)
 	C = R +  Cᵢ.(X[1:end-1])
 	A = Aᵢ.(X[1:end-1])
 	A = permutedims(hcat(A...))
+	solucao_LP(A,C,n)
 	
-	IC = Model(HiGHS.Optimizer)
-	print(A)
-	print(C)
-	print()
-	
- 	#@variable(IC,x[1:2]>=0)
- 	#@variable(IC,s[1:n-1]>=0)
-	#@objective(IC, Min,sum(s))
-	#@constraint(IC, A⋅x +C -x.-sᵢ<= 0)
-	#print(IC)
- 	#optimize!(IC)
- 	#println("Termination status: $(termination_status(IC))")
- 	if termination_status(IC) == MOI.OPTIMAL
-		println("Optimal objective value: $(objective_value(IC))")
- 		println("x: ",value(x))
-	else
- 		println("No optimal solution available")
- 	end
 end
 
-# ╔═╡ b2c24acc-669f-48aa-92c7-0384229dc3b3
 
+# ╔═╡ b2c24acc-669f-48aa-92c7-0384229dc3b3
+let
+	X = [[0.,0],[0,50],[0,100],[50,100],[100,100],[100,0],[100,50],[50,50],[50,0]]
+	n = length(X)
+	transpose([1:n-1])
+	
+end
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -1094,8 +1089,7 @@ version = "17.4.0+0"
 # ╟─9070dc74-242c-434a-bb91-9f71356f9b7a
 # ╟─2f5fe746-d647-49e9-a279-9ff15608ba9a
 # ╟─6740838d-5375-4dde-b466-302ee8917cab
-# ╟─3dd2f886-cadc-4977-9fb7-6775a91f4482
-# ╟─7326928d-6b48-4554-8731-e226acbd091c
+# ╠═3dd2f886-cadc-4977-9fb7-6775a91f4482
 # ╟─bd88545f-9cc6-46bc-b81e-eaf394e3246b
 # ╟─11b437a7-1d58-42d4-bf60-0959fdf26cb3
 # ╟─360738ab-7a14-4196-b89c-d44317c56dac
@@ -1109,15 +1103,15 @@ version = "17.4.0+0"
 # ╟─436080f8-a04a-4099-a84a-9e62db7a7682
 # ╟─cc2b83e1-f73f-4b12-9838-1f0814608ae8
 # ╟─cd85ee94-b233-42ce-b95d-87fa83c4cc18
-# ╠═97aa1405-83a0-43db-9750-b5bdb6104d87
 # ╠═b3415a6f-3ef2-44c4-88e0-aacb329c6cce
-# ╠═5357d93c-7e33-4b51-a258-2c02d7ecfa55
 # ╠═e512bfd2-dc41-4f94-8ff2-89d2d22444e5
-# ╠═42d6202d-bb1b-4b28-a3aa-3faca6209956
 # ╠═60588c84-3079-4367-a305-18cef2c66e21
+# ╠═42d6202d-bb1b-4b28-a3aa-3faca6209956
+# ╠═5357d93c-7e33-4b51-a258-2c02d7ecfa55
 # ╠═c4595db0-c41d-4671-aee3-8f7f95b10aae
 # ╠═6aa9a5a3-a411-403d-84f1-1535e251c45e
 # ╠═c495e742-528f-4d9b-887a-53c487bf3734
+# ╠═98edb114-343b-4d36-95aa-a19946a43fd4
 # ╠═b2c24acc-669f-48aa-92c7-0384229dc3b3
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
