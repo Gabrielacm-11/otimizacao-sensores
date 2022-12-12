@@ -224,23 +224,24 @@ $$A_{i}x+C_{i}-S_{i}\leq 0$$
 """
 
 # ╔═╡ b3415a6f-3ef2-44c4-88e0-aacb329c6cce
+#function calcula_dᵢ(n,xₖ,X)
+	#auxx = Vector{Float64}(undef, n)
+	#@inbounds for i = 1:n
+		#aux= sqrt((X[i][1].-xₖ[1]).^2+(X[i][2].-xₖ[2]).^2)
+		#auxx[i]=aux
+	#end
+#	return auxx
+#end
+
+# ╔═╡ b9007dec-36b2-47eb-bf69-cdcb3df88785
 function calcula_dᵢ(n,xₖ,X)
-	auxx = Vector{Float64}(undef, n)
-	@inbounds for i = 1:n
-		aux= sqrt((X[i][1].-xₖ[1]).^2+(X[i][2].-xₖ[2]).^2)
-		auxx[i]=aux
-	end
-	return auxx
+	return norm.(X .- [xₖ])
 end
 
 # ╔═╡ e512bfd2-dc41-4f94-8ff2-89d2d22444e5
 function calcula_dᵢdₙ(n,xₖ,X)
 	dᵢ = calcula_dᵢ(n,xₖ,X)
-	dᵢdₙ = Vector{Float64}(undef, n-1)
-	for i = 1:n-1
-		dᵢdₙ[i] = dᵢ[i] .- dᵢ[n]
-	end	
-	return dᵢdₙ
+	return (dᵢ[1:end-1].-dᵢ[end])
 end
 
 # ╔═╡ 60588c84-3079-4367-a305-18cef2c66e21
@@ -297,7 +298,14 @@ function solucao_LP(A, C, n)
 	    println("s: ",value.(sᵢ))
 
 	else
- 		println("No optimal solution available")
+ 		@constraint(IC,(A*x)+C-sᵢ .<= 0)
+		if termination_status(IC) == MOI.OPTIMAL
+				println("Optimal objective value: $(objective_value(IC))")
+ 			println("x: ",value.(x))
+	    	println("s: ",value.(sᵢ))
+		else
+			println("No optimal solution available")
+		end
  	end
 end
 
@@ -326,7 +334,7 @@ let
 	Random.seed!(10)
 	X = [[0.,0],[100,100.],[0,100.],[100,0.]]
 	n = length(X)
-	xₖ = [20,20]
+	xₖ = [111,99]
 	v = 20
 	σ = Float64[.5,2,2.0,1]
 	R = calcula_rᵢ(n,σ,xₖ,X,v)
@@ -388,7 +396,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.8.1"
 manifest_format = "2.0"
-project_hash = "69370ea46492443cc759ed18ca0d8e46f0f940de"
+project_hash = "07287f7854c3f75419346d4f8ed3c89a8c09f1ad"
 
 [[deps.ArgTools]]
 uuid = "0dad84c5-d112-42e6-8d28-ef12dabb789f"
@@ -1126,14 +1134,15 @@ version = "17.4.0+0"
 # ╟─cc2b83e1-f73f-4b12-9838-1f0814608ae8
 # ╟─cd85ee94-b233-42ce-b95d-87fa83c4cc18
 # ╠═b3415a6f-3ef2-44c4-88e0-aacb329c6cce
+# ╠═b9007dec-36b2-47eb-bf69-cdcb3df88785
 # ╠═e512bfd2-dc41-4f94-8ff2-89d2d22444e5
 # ╠═60588c84-3079-4367-a305-18cef2c66e21
 # ╠═42d6202d-bb1b-4b28-a3aa-3faca6209956
 # ╠═5357d93c-7e33-4b51-a258-2c02d7ecfa55
-# ╠═c4595db0-c41d-4671-aee3-8f7f95b10aae
-# ╠═6aa9a5a3-a411-403d-84f1-1535e251c45e
-# ╠═c495e742-528f-4d9b-887a-53c487bf3734
 # ╠═98edb114-343b-4d36-95aa-a19946a43fd4
+# ╠═6aa9a5a3-a411-403d-84f1-1535e251c45e
+# ╠═c4595db0-c41d-4671-aee3-8f7f95b10aae
+# ╠═c495e742-528f-4d9b-887a-53c487bf3734
 # ╠═b2c24acc-669f-48aa-92c7-0384229dc3b3
 # ╠═770c658b-5908-43ba-902a-87fc41e989bb
 # ╠═f2252c53-84f4-4242-975c-89f3e1e211bc
