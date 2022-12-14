@@ -265,10 +265,24 @@ function solucao_LP(A, C, n)
  	end
 end
 
+# ╔═╡ 7b8c808b-113b-46e0-819b-7bb7db2c970a
+let
+function Input(prompt)
+    print(prompt)
+    readline()
+end
+
+n = Input("valores de X, digitar [[12.,12],[12.,12]]\n")
+println("Your name is $n.")
+end
+
 # ╔═╡ c4595db0-c41d-4671-aee3-8f7f95b10aae
 let
-	X = [[0.,0],[0,50],[0,100],[50,100],[100,100],[100,0],[100,50],[50,50],[50,0]]
-	xₖ = [15,50]
+	println("valores de X, digitar [[12.,12],[12.,12]]")
+
+	X =  readline()
+	println("valor de Xₖ, digitar [12.,12]")
+	xₖ=  readline()
 	Random.seed!(15)
 	v = 2
 	σ = [1,2,3]
@@ -1056,6 +1070,7 @@ version = "17.4.0+0"
 # ╟─cd85ee94-b233-42ce-b95d-87fa83c4cc18
 # ╠═5357d93c-7e33-4b51-a258-2c02d7ecfa55
 # ╠═98edb114-343b-4d36-95aa-a19946a43fd4
+# ╠═7b8c808b-113b-46e0-819b-7bb7db2c970a
 # ╠═c4595db0-c41d-4671-aee3-8f7f95b10aae
 # ╠═fa94b397-9be9-434d-b023-d54a898b13c3
 # ╟─00000000-0000-0000-0000-000000000001
