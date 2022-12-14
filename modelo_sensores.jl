@@ -223,63 +223,18 @@ md"""
 $$A_{i}x+C_{i}-S_{i}\leq 0$$
 """
 
-# ╔═╡ b3415a6f-3ef2-44c4-88e0-aacb329c6cce
-#function calcula_dᵢ(n,xₖ,X)
-	#auxx = Vector{Float64}(undef, n)
-	#@inbounds for i = 1:n
-		#aux= sqrt((X[i][1].-xₖ[1]).^2+(X[i][2].-xₖ[2]).^2)
-		#auxx[i]=aux
-	#end
-#	return auxx
-#end
-
-# ╔═╡ b9007dec-36b2-47eb-bf69-cdcb3df88785
-function calcula_dᵢ(n,xₖ,X)
-	return norm.(X .- [xₖ])
-end
-
-# ╔═╡ e512bfd2-dc41-4f94-8ff2-89d2d22444e5
-function calcula_dᵢdₙ(n,xₖ,X)
-	dᵢ = calcula_dᵢ(n,xₖ,X)
-	return (dᵢ[1:end-1].-dᵢ[end])
-end
-
-# ╔═╡ 60588c84-3079-4367-a305-18cef2c66e21
-function calcula_ω(σ,v)
+# ╔═╡ 5357d93c-7e33-4b51-a258-2c02d7ecfa55
+function calcula_rᵢ(n,σ,xₖ,X,v)
 	ω = similar(σ)
 	for (index,σi) in enumerate(σ)
 		ω[index] = rand(Normal(0,σi/v))
 	end
-	return ω
-end
-
-# ╔═╡ 42d6202d-bb1b-4b28-a3aa-3faca6209956
-function calcula_Xi(σ,v)
-	ωᵢ = calcula_ω(σ,v)
-	ωₙ = pop!(ωᵢ)
-	ωᵢ .-= ωₙ
-	ωᵢ *= v
-	return ωᵢ
-end
-
-# ╔═╡ 5357d93c-7e33-4b51-a258-2c02d7ecfa55
-function calcula_rᵢ(n,σ,xₖ,X,v)
-	D = calcula_dᵢdₙ(n,xₖ,X)
-	X = calcula_Xi(σ,v)
-	R = D + X
+	ωₙ = pop!(ω)
+	ω .-= ωₙ
+	ω *= v
+	D = ((norm.(X .- [xₖ]))[1:end-1].-(norm.(X .- [xₖ]))[end])
+	R = D + ω
 	return R
-end
-
-# ╔═╡ 6aa9a5a3-a411-403d-84f1-1535e251c45e
-begin
-	Random.seed!(3)
-	v = 2
-	σ = [1,2,3]
-	ω = Float64[]
-	for σi in σ
-		push!(ω,rand(Normal(0,σi/v)))
-	end
-	ω
 end
 
 # ╔═╡ 98edb114-343b-4d36-95aa-a19946a43fd4
@@ -295,12 +250,13 @@ function solucao_LP(A, C, n)
  	if termination_status(IC) == MOI.OPTIMAL
 		println("Optimal objective value: $(objective_value(IC))")
  		println("x: ",value.(x))
-	    println("s: ",value.(sᵢ))
-
 	else
  		@constraint(IC,(A*x)+C-sᵢ .<= 0)
+		print(IC)
+ 		optimize!(IC)
+ 		println("Termination status: $(termination_status(IC))")
 		if termination_status(IC) == MOI.OPTIMAL
-				println("Optimal objective value: $(objective_value(IC))")
+			println("Optimal objective value: $(objective_value(IC))")
  			println("x: ",value.(x))
 	    	println("s: ",value.(sᵢ))
 		else
@@ -311,10 +267,16 @@ end
 
 # ╔═╡ c4595db0-c41d-4671-aee3-8f7f95b10aae
 let
-	Random.seed!(13)
 	X = [[0.,0],[0,50],[0,100],[50,100],[100,100],[100,0],[100,50],[50,50],[50,0]]
-	n = length(X)
 	xₖ = [15,50]
+	Random.seed!(15)
+	v = 2
+	σ = [1,2,3]
+	ω = Float64[]
+	for σi in σ
+		push!(ω,rand(Normal(0,σi/v)))
+	end
+	n = length(X)
 	@assert xₖ ∉ X "xₖ belongs to X"
 	v = 0.001
 	σ = fill(4.,n)
@@ -326,47 +288,6 @@ let
 	A = permutedims(hcat(A...))
 	solucao_LP(A,C,n)
 end
-
-# ╔═╡ c495e742-528f-4d9b-887a-53c487bf3734
-let
-
-	#######MAIN###########
-	Random.seed!(10)
-	X = [[0.,0],[100,100.],[0,100.],[100,0.]]
-	n = length(X)
-	xₖ = [111,99]
-	v = 20
-	σ = Float64[.5,2,2.0,1]
-	R = calcula_rᵢ(n,σ,xₖ,X,v)
-	Aᵢ(xᵢ) = ((xₖ - X[end])/norm(xₖ - X[end]))  - ((xₖ - xᵢ)/norm(xₖ - xᵢ))
-	Cᵢ(xᵢ) = norm(xₖ - X[end]) -  norm(xₖ - xᵢ) + dot(Aᵢ(xᵢ),-xₖ)
-	C = R +  Cᵢ.(X[1:end-1])
-	A = Aᵢ.(X[1:end-1])
-	A = permutedims(hcat(A...))
-	solucao_LP(A,C,n)
-	
-end
-
-
-# ╔═╡ b2c24acc-669f-48aa-92c7-0384229dc3b3
-let
-	X = [[0.,0],[0,50],[0,100],[50,100],[100,100],[100,0],[100,50],[50,50],[50,0]]
-	n = length(X)
-	transpose([1:n-1])
-	
-end
-
-# ╔═╡ 770c658b-5908-43ba-902a-87fc41e989bb
-begin
-	X = [[0.,0],[0,50],[0,100],[50,100],[100,100],[100,0],[100,50],[50,50],[50,0]]
-	n = length(X)
-	xₖ = [15,50]
-	@assert xₖ ∉ X "xₖ belongs to X"
-	@benchmark norm.([xₖ] .- $X)
-end
-
-# ╔═╡ f2252c53-84f4-4242-975c-89f3e1e211bc
-@benchmark calcula_dᵢ(n, xₖ, X)
 
 # ╔═╡ fa94b397-9be9-434d-b023-d54a898b13c3
 ##http://www.cnmac.org.br/novo/index.php/CNMAC/conteudo/2022/53/99
@@ -1133,19 +1054,9 @@ version = "17.4.0+0"
 # ╟─436080f8-a04a-4099-a84a-9e62db7a7682
 # ╟─cc2b83e1-f73f-4b12-9838-1f0814608ae8
 # ╟─cd85ee94-b233-42ce-b95d-87fa83c4cc18
-# ╠═b3415a6f-3ef2-44c4-88e0-aacb329c6cce
-# ╠═b9007dec-36b2-47eb-bf69-cdcb3df88785
-# ╠═e512bfd2-dc41-4f94-8ff2-89d2d22444e5
-# ╠═60588c84-3079-4367-a305-18cef2c66e21
-# ╠═42d6202d-bb1b-4b28-a3aa-3faca6209956
 # ╠═5357d93c-7e33-4b51-a258-2c02d7ecfa55
 # ╠═98edb114-343b-4d36-95aa-a19946a43fd4
-# ╠═6aa9a5a3-a411-403d-84f1-1535e251c45e
 # ╠═c4595db0-c41d-4671-aee3-8f7f95b10aae
-# ╠═c495e742-528f-4d9b-887a-53c487bf3734
-# ╠═b2c24acc-669f-48aa-92c7-0384229dc3b3
-# ╠═770c658b-5908-43ba-902a-87fc41e989bb
-# ╠═f2252c53-84f4-4242-975c-89f3e1e211bc
 # ╠═fa94b397-9be9-434d-b023-d54a898b13c3
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
